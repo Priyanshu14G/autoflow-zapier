@@ -2,6 +2,7 @@ import { Module, Global } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { QUEUE_NAMES } from './queue.constants';
+import { QueueService } from './queue.service';
 
 @Global()
 @Module({
@@ -28,6 +29,7 @@ import { QUEUE_NAMES } from './queue.constants';
       { name: QUEUE_NAMES.MAINTENANCE },
     ),
   ],
-  exports: [BullModule],
+  providers: [QueueService],
+  exports: [BullModule, QueueService],
 })
 export class QueueModule {}

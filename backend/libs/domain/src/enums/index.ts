@@ -1,43 +1,7 @@
-export enum Role {
-  OWNER = 'OWNER',
-  ADMIN = 'ADMIN',
-  EDITOR = 'EDITOR',
-  VIEWER = 'VIEWER',
-}
-
-export enum WorkflowStatus {
-  DRAFT = 'DRAFT',
-  PUBLISHED = 'PUBLISHED',
-  ARCHIVED = 'ARCHIVED',
-}
-
-export enum RunStatus {
-  PENDING = 'PENDING',
-  RUNNING = 'RUNNING',
-  SUCCESS = 'SUCCESS',
-  FAILED = 'FAILED',
-  CANCELLED = 'CANCELLED',
-  TIMED_OUT = 'TIMED_OUT',
-  WAITING = 'WAITING',
-}
-
-export enum StepRunStatus {
-  PENDING = 'PENDING',
-  RUNNING = 'RUNNING',
-  SUCCESS = 'SUCCESS',
-  FAILED = 'FAILED',
-  SKIPPED = 'SKIPPED',
-  RETRYING = 'RETRYING',
-  TIMED_OUT = 'TIMED_OUT',
-}
-
-export enum NodeType {
-  TRIGGER = 'TRIGGER',
-  ACTION = 'ACTION',
-  CONDITION = 'CONDITION',
-  FILTER = 'FILTER',
-  DELAY = 'DELAY',
-  TRANSFORM = 'TRANSFORM',
-  WEBHOOK = 'WEBHOOK',
-  AI = 'AI',
-}
+export {
+  Role,
+  WorkflowStatus,
+  RunStatus,
+  StepRunStatus,
+  NodeType,
+} from '@prisma/client';
