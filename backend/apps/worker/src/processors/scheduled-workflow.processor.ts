@@ -76,10 +76,9 @@ export class ScheduledWorkflowProcessor extends WorkerHost {
       data: {
         workflowId,
         versionId: version.id,
-        workspaceId,
         status: RunStatus.PENDING,
-        triggeredBy: `schedule:${scheduledJobId}`,
-        triggerData: triggerPayload as Prisma.InputJsonObject,
+        triggerType: `schedule:${scheduledJobId}`,
+        triggerPayload: triggerPayload as Prisma.InputJsonObject,
         contextData: {
           trigger: triggerPayload,
         } as Prisma.InputJsonObject,

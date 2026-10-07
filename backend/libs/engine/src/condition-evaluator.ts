@@ -150,11 +150,9 @@ export class ConditionEvaluator {
 
       case 'eq':
         // Use loose equality for cross-type comparisons (e.g., number vs. string from templates)
-        // eslint-disable-next-line eqeqeq
         return fieldValue == compareValue;
 
       case 'neq':
-        // eslint-disable-next-line eqeqeq
         return fieldValue != compareValue;
 
       case 'gt':

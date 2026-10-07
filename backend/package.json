@@ -41,6 +41,7 @@
     "dotenv": "^16.4.7",
     "helmet": "^8.0.0",
     "ioredis": "^5.5.0",
+    "nestjs": "^0.0.1",
     "nestjs-pino": "^4.3.0",
     "node-cron": "^4.6.0",
     "passport": "^0.7.0",

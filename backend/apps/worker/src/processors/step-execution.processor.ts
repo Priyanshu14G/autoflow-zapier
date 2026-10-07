@@ -98,7 +98,7 @@ export class StepExecutionProcessor extends WorkerHost {
           id: run.id,
           workflowId: run.workflowId,
           startedAt: run.startedAt ?? new Date(),
-          triggeredBy: run.triggeredBy ?? null,
+          triggeredBy: run.triggerType ?? null,
         },
         currentContext,
       );

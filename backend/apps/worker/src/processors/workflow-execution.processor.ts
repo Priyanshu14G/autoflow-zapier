@@ -4,7 +4,7 @@ import { Job } from 'bullmq';
 import { PrismaService } from '@libs/database';
 import { QUEUE_NAMES, QueueService, WorkflowExecutionJobData } from '@libs/queue';
 import { RunStatus, StepRunStatus, NodeType } from '@libs/domain';
-import { DataSanitizer, StepExecutor } from '@libs/engine';
+import { DataSanitizer, StepExecutor, VariableResolver } from '@libs/engine';
 import { Prisma } from '@prisma/client';
 
 @Processor(QUEUE_NAMES.WORKFLOW_EXECUTION)
@@ -78,6 +78,16 @@ export class WorkflowExecutionProcessor extends WorkerHost {
 
     // 3. Execute trigger step
     const sanitizedInput = DataSanitizer.sanitize(triggerPayload);
+    const executionContext = VariableResolver.buildContext(
+      {
+        id: run.id,
+        workflowId: run.workflowId,
+        startedAt: run.startedAt ?? new Date(),
+        triggeredBy: run.triggerType,
+      },
+      { trigger: sanitizedInput },
+    );
+
     const triggerResult = await StepExecutor.executeWithTimeout(
       {
         nodeKey: triggerNode.nodeKey,
@@ -85,6 +95,7 @@ export class WorkflowExecutionProcessor extends WorkerHost {
         config: triggerNode.config as Record<string, unknown>,
       },
       triggerPayload,
+      executionContext,
       10000,
     );
     const sanitizedOutput = DataSanitizer.sanitize(triggerResult.output);
