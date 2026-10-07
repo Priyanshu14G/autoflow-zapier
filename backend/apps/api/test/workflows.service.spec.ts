@@ -2,13 +2,19 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { WorkflowsService } from '../src/workflows/workflows.service';
 import { PrismaService } from '@libs/database';
+import { QueueService } from '@libs/queue';
 import { NodeType, WorkflowStatus } from '@libs/domain';
 
 describe('WorkflowsService (Versioning & Immutability)', () => {
   let service: WorkflowsService;
   let prisma: any;
+  let queueService: any;
 
   beforeEach(async () => {
+    queueService = {
+      enqueueWorkflowExecution: jest.fn().mockResolvedValue({ id: 'job-1' }),
+    };
+
     prisma = {
       workflow: {
         create: jest.fn(),
@@ -34,6 +40,12 @@ describe('WorkflowsService (Versioning & Immutability)', () => {
         createMany: jest.fn(),
         deleteMany: jest.fn(),
       },
+      workflowRun: {
+        create: jest.fn(),
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
+        update: jest.fn(),
+      },
       $transaction: jest.fn((callback) => callback(prisma)),
     };
 
@@ -41,6 +53,7 @@ describe('WorkflowsService (Versioning & Immutability)', () => {
       providers: [
         WorkflowsService,
         { provide: PrismaService, useValue: prisma },
+        { provide: QueueService, useValue: queueService },
       ],
     }).compile();
 
