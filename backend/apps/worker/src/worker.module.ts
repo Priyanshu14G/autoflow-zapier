@@ -6,6 +6,7 @@ import { QueueModule } from '@libs/queue';
 import { WorkflowExecutionProcessor } from './processors/workflow-execution.processor';
 import { StepExecutionProcessor } from './processors/step-execution.processor';
 import { RetryExecutionProcessor } from './processors/retry-execution.processor';
+import { ScheduledWorkflowProcessor } from './processors/scheduled-workflow.processor';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { RetryExecutionProcessor } from './processors/retry-execution.processor'
     WorkflowExecutionProcessor,
     StepExecutionProcessor,
     RetryExecutionProcessor,
+    ScheduledWorkflowProcessor,
   ],
 })
 export class WorkerModule {}

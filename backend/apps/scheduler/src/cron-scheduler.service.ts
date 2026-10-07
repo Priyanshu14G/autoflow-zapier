@@ -230,7 +230,7 @@ export class CronSchedulerService implements OnApplicationBootstrap, OnApplicati
   }
 
   /**
-   * Checks if a single cron field (e.g. "*/5", "1-3", "2,4", "*") matches a value.
+   * Checks if a single cron field (e.g. step, range, list, wildcard) matches a value.
    */
   static fieldMatches(field: string, value: number, min: number, max: number): boolean {
     if (field === '*') return true;

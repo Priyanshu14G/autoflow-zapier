@@ -79,9 +79,14 @@ describe('VariableResolver', () => {
       expect(result).toBe('Hello alice@example.com, total is 9000');
     });
 
-    it('returns empty string for unknown path', () => {
+    it('returns undefined for unknown path in single-token mode', () => {
       const result = VariableResolver.resolveString('{{trigger.nonexistent}}', baseContext);
-      expect(result).toBe('');
+      expect(result).toBeUndefined();
+    });
+
+    it('replaces with empty string for unknown path when embedded in string', () => {
+      const result = VariableResolver.resolveString('Prefix-{{trigger.nonexistent}}-Suffix', baseContext);
+      expect(result).toBe('Prefix--Suffix');
     });
 
     it('returns undefined for unknown namespace in single-token mode', () => {
