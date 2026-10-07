@@ -18,6 +18,14 @@ export interface StepExecutionJobData {
   retryCount?: number;
 }
 
+export interface ScheduledWorkflowJobData {
+  scheduledJobId: string;
+  workflowId: string;
+  workspaceId: string;
+  /** ISO-8601 timestamp of the scheduled fire time — used for idempotency */
+  scheduledAt: string;
+}
+
 @Injectable()
 export class QueueService {
   private readonly logger = new Logger(QueueService.name);
@@ -29,6 +37,8 @@ export class QueueService {
     private readonly stepQueue: Queue<StepExecutionJobData>,
     @InjectQueue(QUEUE_NAMES.RETRY_PROCESSING)
     private readonly retryQueue: Queue<StepExecutionJobData>,
+    @InjectQueue(QUEUE_NAMES.SCHEDULED_WORKFLOWS)
+    private readonly scheduledQueue: Queue<ScheduledWorkflowJobData>,
   ) {}
 
   async enqueueWorkflowExecution(
@@ -65,6 +75,25 @@ export class QueueService {
       delay: delayMs,
       removeOnComplete: 1000,
       removeOnFail: 5000,
+    });
+  }
+
+  /**
+   * Enqueues a scheduled workflow trigger.
+   * The job ID is deterministic based on the scheduled job ID + fire time
+   * to provide natural idempotency: duplicate scheduler ticks won't produce
+   * duplicate queue jobs.
+   */
+  async enqueueScheduledWorkflow(data: ScheduledWorkflowJobData) {
+    const idempotencyKey = `scheduled:${data.scheduledJobId}:${data.scheduledAt}`;
+    this.logger.log(
+      `Enqueueing scheduled workflow trigger for ${data.workflowId} [${idempotencyKey}]`,
+    );
+
+    return this.scheduledQueue.add('trigger-scheduled-workflow', data, {
+      jobId: idempotencyKey,
+      removeOnComplete: 500,
+      removeOnFail: 2000,
     });
   }
 }
