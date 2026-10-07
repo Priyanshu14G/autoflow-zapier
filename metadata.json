@@ -1,0 +1,6 @@
+{
+  "name": "AutoFlow Studio",
+  "description": "Modern workflow automation and orchestration platform with visual node-based builder, AI generation, integration marketplace, and execution monitoring.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
