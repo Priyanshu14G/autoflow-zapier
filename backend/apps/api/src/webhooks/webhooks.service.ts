@@ -5,12 +5,14 @@ import {
   ForbiddenException,
   Logger,
   UnauthorizedException,
+  Optional,
 } from '@nestjs/common';
 import { createHmac, timingSafeEqual, randomBytes } from 'crypto';
 import { PrismaService } from '@libs/database';
 import { QueueService } from '@libs/queue';
 import { RunStatus } from '@libs/domain';
 import { Prisma } from '@prisma/client';
+import { AuditLogService } from '@libs/common';
 import { CreateWebhookDto, UpdateWebhookDto } from './dto/webhook.dto';
 
 @Injectable()
@@ -20,6 +22,7 @@ export class WebhooksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly queueService: QueueService,
+    @Optional() private readonly auditLogService?: AuditLogService,
   ) {}
 
   // ─── Management (authenticated) ──────────────────────────────────────────
@@ -42,6 +45,20 @@ export class WebhooksService {
         isActive: true,
       },
     });
+
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { organizationId: true },
+    });
+    if (workspace) {
+      this.auditLogService?.log({
+        organizationId: workspace.organizationId,
+        action: 'WEBHOOK_CREATED',
+        entityType: 'WEBHOOK',
+        entityId: webhook.id,
+        metadata: { workflowId: dto.workflowId },
+      });
+    }
 
     return this.formatWebhook(webhook, baseUrl);
   }
@@ -101,6 +118,20 @@ export class WebhooksService {
       throw new NotFoundException(`Webhook '${webhookId}' not found`);
     }
     await this.prisma.webhook.delete({ where: { id: webhookId } });
+
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { organizationId: true },
+    });
+    if (workspace) {
+      this.auditLogService?.log({
+        organizationId: workspace.organizationId,
+        action: 'WEBHOOK_DELETED',
+        entityType: 'WEBHOOK',
+        entityId: webhookId,
+      });
+    }
+
     return { message: 'Webhook deleted' };
   }
 

@@ -9,11 +9,20 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Optional,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ConnectionService, ConnectorRegistry } from '@libs/integrations';
+import { PrismaService } from '@libs/database';
 import { CreateConnectionDto } from './dto/create-connection.dto';
-import { JwtAuthGuard, TenantGuard, RequirePermissions } from '@libs/common';
+import {
+  JwtAuthGuard,
+  TenantGuard,
+  RequirePermissions,
+  CurrentUser,
+  AuthenticatedUser,
+  AuditLogService,
+} from '@libs/common';
 import { Permission } from '@libs/domain';
 
 @ApiTags('Connections & Integrations')
@@ -24,6 +33,8 @@ export class ConnectionsController {
   constructor(
     private readonly connectionService: ConnectionService,
     private readonly connectorRegistry: ConnectorRegistry,
+    private readonly prisma: PrismaService,
+    @Optional() private readonly auditLogService?: AuditLogService,
   ) {}
 
   @Get('integrations')
@@ -38,11 +49,27 @@ export class ConnectionsController {
   @RequirePermissions(Permission.CONNECTION_MANAGE)
   @ApiOperation({ summary: 'Create a new encrypted integration connection' })
   @ApiResponse({ status: 201, description: 'Connection created successfully' })
-  createConnection(
+  async createConnection(
     @Param('workspaceId') workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateConnectionDto,
   ) {
-    return this.connectionService.createConnection(workspaceId, dto);
+    const connection = await this.connectionService.createConnection(workspaceId, dto);
+    const ws = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { organizationId: true },
+    });
+    if (ws) {
+      this.auditLogService?.log({
+        organizationId: ws.organizationId,
+        userId: user.id,
+        action: 'CONNECTION_CREATED',
+        entityType: 'CONNECTION',
+        entityId: connection.id,
+        metadata: { integration: dto.integration, name: dto.name },
+      });
+    }
+    return connection;
   }
 
   @Get('connections')
@@ -73,10 +100,25 @@ export class ConnectionsController {
   @RequirePermissions(Permission.CONNECTION_MANAGE)
   @ApiOperation({ summary: 'Delete/revoke an integration connection' })
   @ApiResponse({ status: 204, description: 'Connection deleted' })
-  deleteConnection(
+  async deleteConnection(
     @Param('workspaceId') workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
   ) {
-    return this.connectionService.deleteConnection(workspaceId, id);
+    const res = await this.connectionService.deleteConnection(workspaceId, id);
+    const ws = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { organizationId: true },
+    });
+    if (ws) {
+      this.auditLogService?.log({
+        organizationId: ws.organizationId,
+        userId: user.id,
+        action: 'CONNECTION_DELETED',
+        entityType: 'CONNECTION',
+        entityId: id,
+      });
+    }
+    return res;
   }
 }

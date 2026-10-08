@@ -4,9 +4,11 @@ import {
   ForbiddenException,
   UnauthorizedException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { randomBytes, createHash, timingSafeEqual } from 'crypto';
 import { PrismaService } from '@libs/database';
+import { AuditLogService } from '@libs/common';
 import { CreateApiKeyDto } from './dto/api-key.dto';
 
 const KEY_PREFIX_LENGTH = 8;
@@ -16,7 +18,10 @@ const KEY_BYTES = 32; // 64 hex chars of entropy
 export class ApiKeysService {
   private readonly logger = new Logger(ApiKeysService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly auditLogService?: AuditLogService,
+  ) {}
 
   /**
    * Generates a new API key.
@@ -46,6 +51,21 @@ export class ApiKeysService {
     });
 
     this.logger.log(`API key '${dto.name}' created for workspace ${workspaceId} (prefix: ${prefix})`);
+
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { organizationId: true },
+    });
+    if (workspace) {
+      this.auditLogService?.log({
+        organizationId: workspace.organizationId,
+        userId,
+        action: 'API_KEY_CREATED',
+        entityType: 'API_KEY',
+        entityId: apiKey.id,
+        metadata: { name: apiKey.name, prefix },
+      });
+    }
 
     // Return the full raw key exactly once
     return {
@@ -94,6 +114,19 @@ export class ApiKeysService {
       where: { id: keyId },
       data: { isRevoked: true },
     });
+
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { organizationId: true },
+    });
+    if (workspace) {
+      this.auditLogService?.log({
+        organizationId: workspace.organizationId,
+        action: 'API_KEY_REVOKED',
+        entityType: 'API_KEY',
+        entityId: keyId,
+      });
+    }
 
     this.logger.log(`API key ${keyId} revoked in workspace ${workspaceId}`);
     return { message: 'API key revoked' };

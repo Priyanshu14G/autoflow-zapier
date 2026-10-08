@@ -3,12 +3,14 @@ import {
   ConflictException,
   UnauthorizedException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '@libs/database';
 import { Role } from '@libs/domain';
+import { AuditLogService } from '@libs/common';
 import { RegisterDto, LoginDto, GoogleAuthDto, AuthResponseDto } from './dto/auth.dto';
 
 @Injectable()
@@ -18,6 +20,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    @Optional() private readonly auditLogService?: AuditLogService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
@@ -73,6 +76,15 @@ export class AuthService {
 
     const accessToken = this.generateToken(result.user.id, result.user.email);
 
+    this.auditLogService?.log({
+      organizationId: result.organization.id,
+      userId: result.user.id,
+      action: 'USER_REGISTERED',
+      entityType: 'USER',
+      entityId: result.user.id,
+      metadata: { email: result.user.email },
+    });
+
     return {
       accessToken,
       user: {
@@ -113,6 +125,16 @@ export class AuthService {
     const accessToken = this.generateToken(user.id, user.email);
     const defaultWorkspaceId =
       user.memberships[0]?.organization?.workspaces[0]?.id;
+
+    if (user.memberships[0]?.organizationId) {
+      this.auditLogService?.log({
+        organizationId: user.memberships[0].organizationId,
+        userId: user.id,
+        action: 'USER_LOGIN',
+        entityType: 'USER',
+        entityId: user.id,
+      });
+    }
 
     return {
       accessToken,

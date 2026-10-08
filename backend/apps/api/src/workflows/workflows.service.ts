@@ -3,12 +3,14 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@libs/database';
 import { NodeType, WorkflowStatus, RunStatus } from '@libs/domain';
 import { QueueService } from '@libs/queue';
+import { AuditLogService } from '@libs/common';
 import {
   WorkflowGraphValidator,
   WorkflowGraphDefinition,
@@ -27,6 +29,7 @@ export class WorkflowsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly queueService: QueueService,
+    @Optional() private readonly auditLogService?: AuditLogService,
   ) {}
 
   async create(workspaceId: string, dto: CreateWorkflowDto) {
@@ -379,7 +382,7 @@ export class WorkflowsService {
     const checksum = createHash('sha256').update(canonicalPayload).digest('hex');
 
     // 3. Atomically archive previous published versions and promote draft
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // Archive any currently published versions
       await tx.workflowVersion.updateMany({
         where: {
@@ -413,6 +416,27 @@ export class WorkflowsService {
 
       return published;
     });
+
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { organizationId: true },
+    });
+
+    if (workspace) {
+      this.auditLogService?.log({
+        organizationId: workspace.organizationId,
+        action: 'WORKFLOW_PUBLISHED',
+        entityType: 'WORKFLOW',
+        entityId: workflowId,
+        metadata: {
+          versionId: result.id,
+          versionNumber: result.versionNumber,
+          checksum: result.checksum,
+        },
+      });
+    }
+
+    return result;
   }
 
   async listVersions(workspaceId: string, workflowId: string) {
@@ -482,6 +506,11 @@ export class WorkflowsService {
   async delete(workspaceId: string, workflowId: string) {
     const workflow = await this.prisma.workflow.findFirst({
       where: { id: workflowId, workspaceId },
+      include: {
+        workspace: {
+          select: { organizationId: true },
+        },
+      },
     });
 
     if (!workflow) {
@@ -490,6 +519,13 @@ export class WorkflowsService {
 
     await this.prisma.workflow.delete({
       where: { id: workflowId },
+    });
+
+    this.auditLogService?.log({
+      organizationId: workflow.workspace.organizationId,
+      action: 'WORKFLOW_DELETED',
+      entityType: 'WORKFLOW',
+      entityId: workflowId,
     });
 
     return { message: 'Workflow deleted successfully' };
