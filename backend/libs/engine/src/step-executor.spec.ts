@@ -117,4 +117,72 @@ describe('StepExecutor', () => {
       StepExecutor.executeWithTimeout(node, {}, mockContext, 20),
     ).rejects.toThrow(TimeoutError);
   });
+
+  it('delegates to ActionDispatcher when integration and operation are configured', async () => {
+    const node = {
+      nodeKey: 'notify_slack',
+      type: NodeType.ACTION,
+      integration: 'slack',
+      operation: 'post_message',
+    };
+
+    const mockDispatcher = {
+      executeAction: jest.fn().mockResolvedValue({
+        success: true,
+        data: { channel: '#alerts', ts: '12345.67' },
+      }),
+    };
+
+    const result = await StepExecutor.executeWithTimeout(
+      node,
+      { channel: '#alerts' },
+      mockContext,
+      5000,
+      mockDispatcher,
+      { botToken: 'xoxb-test' },
+    );
+
+    expect(mockDispatcher.executeAction).toHaveBeenCalledWith(
+      'slack',
+      'post_message',
+      expect.objectContaining({
+        input: { channel: '#alerts' },
+        credentials: { botToken: 'xoxb-test' },
+      }),
+    );
+    expect(result.output).toMatchObject({
+      status: 'success',
+      integration: 'slack',
+      operation: 'post_message',
+      channel: '#alerts',
+      ts: '12345.67',
+    });
+  });
+
+  it('throws error when ActionDispatcher action execution returns success: false', async () => {
+    const node = {
+      nodeKey: 'failing_action',
+      type: NodeType.ACTION,
+      integration: 'http',
+      operation: 'request',
+    };
+
+    const mockDispatcher = {
+      executeAction: jest.fn().mockResolvedValue({
+        success: false,
+        data: {},
+        error: 'Connection refused',
+      }),
+    };
+
+    await expect(
+      StepExecutor.executeWithTimeout(
+        node,
+        {},
+        mockContext,
+        5000,
+        mockDispatcher,
+      ),
+    ).rejects.toThrow('Connection refused');
+  });
 });

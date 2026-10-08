@@ -8,6 +8,22 @@ export interface StepExecutionResult {
   durationMs: number;
 }
 
+export interface ActionDispatcher {
+  executeAction(
+    connectorId: string,
+    actionKey: string,
+    context: {
+      input: Record<string, unknown>;
+      credentials?: Record<string, unknown>;
+      timeoutMs?: number;
+    },
+  ): Promise<{
+    success: boolean;
+    data: Record<string, unknown>;
+    error?: string;
+  }>;
+}
+
 export class TimeoutError extends Error {
   constructor(message = 'Step execution timed out') {
     super(message);
@@ -18,7 +34,7 @@ export class TimeoutError extends Error {
 export class StepExecutor {
   /**
    * Executes a node operation within a guaranteed maximum timeout window.
-   * All template variables in `inputData` are resolved against the execution context
+   * All template variables in `rawInput` are resolved against the execution context
    * before the node receives them.
    */
   static async executeWithTimeout(
@@ -26,6 +42,8 @@ export class StepExecutor {
     rawInput: Record<string, unknown>,
     context: ExecutionContext,
     timeoutMs = 30000,
+    dispatcher?: ActionDispatcher,
+    credentials?: Record<string, unknown>,
   ): Promise<StepExecutionResult> {
     const startTime = Date.now();
 
@@ -42,7 +60,14 @@ export class StepExecutor {
 
     // Resolve all template variables in the input before dispatching
     const resolvedInput = VariableResolver.resolve(rawInput, context) as Record<string, unknown>;
-    const executionPromise = this.dispatchNode(node, resolvedInput, context);
+    const executionPromise = this.dispatchNode(
+      node,
+      resolvedInput,
+      context,
+      timeoutMs,
+      dispatcher,
+      credentials,
+    );
 
     const output = await Promise.race([executionPromise, timeoutPromise]);
     const durationMs = Date.now() - startTime;
@@ -54,6 +79,9 @@ export class StepExecutor {
     node: WorkflowNodeDefinition,
     input: Record<string, unknown>,
     context: ExecutionContext,
+    timeoutMs: number,
+    dispatcher?: ActionDispatcher,
+    credentials?: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
     switch (node.type) {
       case NodeType.TRIGGER:
@@ -64,13 +92,32 @@ export class StepExecutor {
           ...input,
         };
 
-      case NodeType.TRANSFORM:
-        // Simple passthrough/mapping; real transformations wired in Phase 6
+      case NodeType.TRANSFORM: {
+        if (dispatcher && node.operation) {
+          const transformResult = await dispatcher.executeAction(
+            node.integration || 'transform',
+            node.operation,
+            { input, credentials, timeoutMs },
+          );
+
+          if (!transformResult.success) {
+            throw new Error(transformResult.error || `Transform operation '${node.operation}' failed`);
+          }
+
+          return {
+            transformed: true,
+            timestamp: new Date().toISOString(),
+            ...transformResult.data,
+          };
+        }
+
+        // Simple passthrough/mapping fallback
         return {
           transformed: true,
           timestamp: new Date().toISOString(),
           data: input,
         };
+      }
 
       case NodeType.DELAY: {
         const delayMs = typeof node.config?.delayMs === 'number' ? node.config.delayMs : 100;
@@ -79,12 +126,6 @@ export class StepExecutor {
       }
 
       case NodeType.CONDITION: {
-        /**
-         * Evaluates a condition expression stored in node.config.condition.
-         * The expression must be a valid ConditionNode JSON object.
-         * The branch result is exposed as `passed` (boolean) so downstream
-         * edges can check it for routing decisions.
-         */
         const conditionConfig = node.config?.condition as ConditionNode | undefined;
 
         if (!conditionConfig) {
@@ -106,8 +147,32 @@ export class StepExecutor {
       }
 
       case NodeType.ACTION:
-      default:
-        // Action execution stub — real integration dispatch is in Phase 6
+      default: {
+        if (dispatcher && node.integration && node.operation) {
+          const actionResult = await dispatcher.executeAction(
+            node.integration,
+            node.operation,
+            {
+              input,
+              credentials,
+              timeoutMs,
+            },
+          );
+
+          if (!actionResult.success) {
+            throw new Error(actionResult.error || `Action '${node.integration}.${node.operation}' execution failed`);
+          }
+
+          return {
+            status: 'success',
+            executedAt: new Date().toISOString(),
+            integration: node.integration,
+            operation: node.operation,
+            ...actionResult.data,
+          };
+        }
+
+        // Fallback stub if no dispatcher provided or integration undefined
         return {
           status: 'success',
           executedAt: new Date().toISOString(),
@@ -115,6 +180,7 @@ export class StepExecutor {
           operation: node.operation,
           payload: input,
         };
+      }
     }
   }
 }

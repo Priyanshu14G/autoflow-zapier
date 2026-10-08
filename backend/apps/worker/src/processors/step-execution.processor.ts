@@ -10,6 +10,7 @@ import {
   ErrorClassifier,
   VariableResolver,
 } from '@libs/engine';
+import { ConnectorRegistry, ConnectionService } from '@libs/integrations';
 import { Prisma } from '@prisma/client';
 
 const MAX_STEP_RETRIES = 3;
@@ -21,6 +22,8 @@ export class StepExecutionProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly queueService: QueueService,
+    private readonly connectorRegistry: ConnectorRegistry,
+    private readonly connectionService: ConnectionService,
   ) {
     super();
   }
@@ -31,6 +34,7 @@ export class StepExecutionProcessor extends WorkerHost {
 
     const run = await this.prisma.workflowRun.findUnique({
       where: { id: runId },
+      include: { workflow: true },
     });
 
     if (!run || run.status === RunStatus.CANCELLED) {
@@ -103,6 +107,22 @@ export class StepExecutionProcessor extends WorkerHost {
         currentContext,
       );
 
+      // Resolve connection credentials if connectionId is specified
+      let credentials: Record<string, unknown> | undefined;
+      const connectionId = (targetNode.config as Record<string, unknown>)?.connectionId as string | undefined;
+      if (connectionId && run.workflow?.workspaceId) {
+        try {
+          const decrypted = await this.connectionService.getDecryptedConnection(
+            run.workflow.workspaceId,
+            connectionId,
+          );
+          credentials = decrypted.credentials;
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger.warn(`Failed to resolve connection ${connectionId}: ${message}`);
+        }
+      }
+
       const result = await StepExecutor.executeWithTimeout(
         {
           nodeKey: targetNode.nodeKey,
@@ -114,6 +134,8 @@ export class StepExecutionProcessor extends WorkerHost {
         inputData,
         executionContext,
         stepTimeoutMs,
+        this.connectorRegistry,
+        credentials,
       );
 
       const sanitizedOutput = DataSanitizer.sanitize(result.output);
