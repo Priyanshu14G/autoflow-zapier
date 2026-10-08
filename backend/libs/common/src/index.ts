@@ -10,4 +10,8 @@ export * from './guards/api-key-auth.guard';
 export * from './guards/jwt-or-api-key-auth.guard';
 export * from './audit/audit-log.service';
 export * from './audit/audit.module';
+export * from './billing/usage-tracker.service';
+export * from './billing/entitlement.service';
+export * from './billing/billing.module';
+
 
