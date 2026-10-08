@@ -188,7 +188,7 @@ export class HttpConnector extends BaseConnector {
     } catch (err: unknown) {
       clearTimeout(timer);
       const durationMs = Date.now() - startTime;
-      const isTimeout = (err as any)?.name === 'AbortError';
+      const isTimeout = (err as { name?: string })?.name === 'AbortError';
       const message = isTimeout
         ? `HTTP request timed out after ${timeoutMs}ms`
         : err instanceof Error

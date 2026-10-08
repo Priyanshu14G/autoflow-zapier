@@ -1,10 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { BaseConnector } from '../../core/base.connector';
-import {
-  ActionExecutionContext,
-  ActionExecutionResult,
-  AuthType,
-} from '../../core/connector.interface';
+import { AuthType } from '../../core/connector.interface';
 
 @Injectable()
 export class TransformConnector extends BaseConnector {

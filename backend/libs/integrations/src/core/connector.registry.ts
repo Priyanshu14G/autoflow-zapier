@@ -3,6 +3,7 @@ import {
   ActionExecutionContext,
   ActionExecutionResult,
   Connector,
+  ConnectorSummary,
 } from './connector.interface';
 
 @Injectable()
