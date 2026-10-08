@@ -5,6 +5,11 @@ import * as argon2 from 'argon2';
 import { AuthService } from '../src/auth/auth.service';
 import { PrismaService } from '@libs/database';
 
+jest.mock('argon2', () => ({
+  hash: jest.fn().mockImplementation(async (plain: string) => `hashed_${plain}`),
+  verify: jest.fn().mockImplementation(async (hash: string, plain: string) => hash === `hashed_${plain}`),
+}));
+
 describe('AuthService', () => {
   let service: AuthService;
   let prisma: any;
