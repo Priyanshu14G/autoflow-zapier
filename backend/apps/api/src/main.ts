@@ -8,7 +8,9 @@ import { HttpExceptionFilter, LoggingInterceptor } from '@libs/common';
 
 async function bootstrap() {
   const logger = new Logger('AutoFlow-API');
-  const app = await NestFactory.create(AppModule);
+
+  // Enable rawBody capture so the webhook ingest controller can verify HMAC signatures
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 4000);
@@ -23,7 +25,7 @@ async function bootstrap() {
     origin: corsOrigin === '*' ? true : corsOrigin.split(','),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id', 'x-api-key'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id', 'x-api-key', 'x-webhook-signature'],
   });
 
   // Global Prefix
