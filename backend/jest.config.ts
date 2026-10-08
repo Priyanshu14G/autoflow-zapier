@@ -17,6 +17,7 @@ const config: Config = {
     '^@libs/queue(|/.*)$': '<rootDir>/libs/queue/src/$1',
     '^@libs/engine(|/.*)$': '<rootDir>/libs/engine/src/$1',
     '^@libs/integrations(|/.*)$': '<rootDir>/libs/integrations/src/$1',
+    '^@libs/ai(|/.*)$': '<rootDir>/libs/ai/src/$1',
   },
 };
 
