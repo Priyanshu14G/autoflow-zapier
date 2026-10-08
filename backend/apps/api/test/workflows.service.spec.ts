@@ -16,6 +16,9 @@ describe('WorkflowsService (Versioning & Immutability)', () => {
     };
 
     prisma = {
+      workspace: {
+        findUnique: jest.fn(),
+      },
       workflow: {
         create: jest.fn(),
         findFirst: jest.fn(),

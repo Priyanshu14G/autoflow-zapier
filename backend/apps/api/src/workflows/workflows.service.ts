@@ -417,7 +417,7 @@ export class WorkflowsService {
       return published;
     });
 
-    const workspace = await this.prisma.workspace.findUnique({
+    const workspace = await this.prisma.workspace?.findUnique({
       where: { id: workspaceId },
       select: { organizationId: true },
     });
