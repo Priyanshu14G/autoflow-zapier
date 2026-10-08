@@ -53,3 +53,7 @@ export interface Connector extends ConnectorMetadata {
   actions: Map<string, ActionDefinition>;
   getAction(actionKey: string): ActionDefinition | undefined;
 }
+
+export interface ConnectorSummary extends ConnectorMetadata {
+  actions: Omit<ActionDefinition, 'execute'>[];
+}

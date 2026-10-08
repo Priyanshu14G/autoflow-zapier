@@ -26,28 +26,23 @@ export class ConnectorRegistry {
     return this.connectors.has(id);
   }
 
-  listConnectors(): Array<ReturnType<Connector['toMetadata']>> {
-    return Array.from(this.connectors.values()).map((c) => {
-      if ('toMetadata' in c && typeof (c as any).toMetadata === 'function') {
-        return (c as any).toMetadata();
-      }
-      return {
-        id: c.id,
-        name: c.name,
-        description: c.description,
-        category: c.category,
-        icon: c.icon,
-        authType: c.authType,
-        authFields: c.authFields,
-        actions: Array.from(c.actions.values()).map(({ key, name, description, inputSchema, outputSchema }) => ({
-          key,
-          name,
-          description,
-          inputSchema,
-          outputSchema,
-        })),
-      };
-    });
+  listConnectors(): ConnectorSummary[] {
+    return Array.from(this.connectors.values()).map((c) => ({
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      category: c.category,
+      icon: c.icon,
+      authType: c.authType,
+      authFields: c.authFields,
+      actions: Array.from(c.actions.values()).map(({ key, name, description, inputSchema, outputSchema }) => ({
+        key,
+        name,
+        description,
+        inputSchema,
+        outputSchema,
+      })),
+    }));
   }
 
   async executeAction(

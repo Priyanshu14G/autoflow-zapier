@@ -56,7 +56,7 @@ export class ConnectionService {
         integration: dto.integration,
         name: dto.name,
         authType: dto.authType,
-        credentials: encrypted.ciphertext,
+        credentials: Uint8Array.from(encrypted.ciphertext),
         iv: encrypted.iv,
         authTag: encrypted.authTag,
         expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,

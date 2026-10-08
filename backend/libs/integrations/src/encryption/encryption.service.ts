@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 
 export interface EncryptedPayload {
-  ciphertext: Buffer;
+  ciphertext: Buffer | Uint8Array;
   iv: string;
   authTag: string;
 }
@@ -48,11 +48,14 @@ export class EncryptionService {
     try {
       const iv = Buffer.from(payload.iv, 'hex');
       const authTag = Buffer.from(payload.authTag, 'hex');
+      const ciphertext = Buffer.isBuffer(payload.ciphertext)
+        ? payload.ciphertext
+        : Buffer.from(payload.ciphertext);
 
       const decipher = crypto.createDecipheriv(this.algorithm, this.key, iv);
       decipher.setAuthTag(authTag);
 
-      const decrypted = Buffer.concat([decipher.update(payload.ciphertext), decipher.final()]);
+      const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
       const text = decrypted.toString('utf8');
 
       if (parseJson) {
