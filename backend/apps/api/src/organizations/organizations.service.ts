@@ -7,16 +7,21 @@ import {
 import { randomBytes } from 'crypto';
 import { PrismaService } from '@libs/database';
 import { Role } from '@libs/domain';
+import { AuditLogService } from '@libs/common';
 import {
   CreateOrganizationDto,
   UpdateOrganizationDto,
   AddOrganizationMemberDto,
   UpdateOrganizationMemberRoleDto,
+  QueryAuditLogsDto,
 } from './dto/organization.dto';
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   async create(userId: string, dto: CreateOrganizationDto) {
     const slug =
@@ -274,4 +279,14 @@ export class OrganizationsService {
 
     return { message: 'Member removed successfully' };
   }
+
+  async getAuditLogs(orgId: string, query: QueryAuditLogsDto) {
+    return this.auditLogService.findByOrganization(orgId, {
+      entityType: query.entityType,
+      userId: query.userId,
+      limit: query.limit,
+      offset: query.offset,
+    });
+  }
 }
+

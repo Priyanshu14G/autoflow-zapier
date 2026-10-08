@@ -20,12 +20,12 @@ import {
   SaveWorkflowDraftDto,
   ExecuteWorkflowDto,
 } from './dto/workflow.dto';
-import { JwtAuthGuard, TenantGuard, RequirePermissions } from '@libs/common';
+import { JwtOrApiKeyAuthGuard, TenantGuard, RequirePermissions } from '@libs/common';
 import { Permission } from '@libs/domain';
 
 @ApiTags('Workflows')
 @ApiBearerAuth('bearer')
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(JwtOrApiKeyAuthGuard, TenantGuard)
 @Controller('workspaces/:workspaceId/workflows')
 export class WorkflowsController {
   constructor(private readonly workflowsService: WorkflowsService) {}

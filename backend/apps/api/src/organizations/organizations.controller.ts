@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
@@ -15,6 +16,7 @@ import {
   UpdateOrganizationDto,
   AddOrganizationMemberDto,
   UpdateOrganizationMemberRoleDto,
+  QueryAuditLogsDto,
 } from './dto/organization.dto';
 import {
   JwtAuthGuard,
@@ -108,5 +110,16 @@ export class OrganizationsController {
     @Param('userId') memberUserId: string,
   ) {
     return this.orgService.removeMember(orgId, memberUserId);
+  }
+
+  @Get(':orgId/audit-logs')
+  @RequirePermissions(Permission.AUDIT_LOG_READ)
+  @ApiOperation({ summary: 'List audit logs for an organization' })
+  @ApiResponse({ status: 200, description: 'List of audit log records' })
+  getAuditLogs(
+    @Param('orgId') orgId: string,
+    @Query() query: QueryAuditLogsDto,
+  ) {
+    return this.orgService.getAuditLogs(orgId, query);
   }
 }

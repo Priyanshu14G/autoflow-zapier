@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '@libs/database';
 
 export interface AuditLogEntry {
@@ -79,7 +80,7 @@ export class AuditLogService {
         entityId: entry.entityId,
         ipAddress: entry.ipAddress ?? null,
         userAgent: entry.userAgent ?? null,
-        metadata: entry.metadata ?? undefined,
+        metadata: (entry.metadata as Prisma.InputJsonValue) ?? undefined,
       },
     });
   }
