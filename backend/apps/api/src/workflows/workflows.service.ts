@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Logger,
   Optional,
 } from '@nestjs/common';
@@ -10,7 +11,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '@libs/database';
 import { NodeType, WorkflowStatus, RunStatus } from '@libs/domain';
 import { QueueService } from '@libs/queue';
-import { AuditLogService } from '@libs/common';
+import { AuditLogService, EntitlementService } from '@libs/common';
 import {
   WorkflowGraphValidator,
   WorkflowGraphDefinition,
@@ -30,9 +31,22 @@ export class WorkflowsService {
     private readonly prisma: PrismaService,
     private readonly queueService: QueueService,
     @Optional() private readonly auditLogService?: AuditLogService,
+    @Optional() private readonly entitlementService?: EntitlementService,
   ) {}
 
   async create(workspaceId: string, dto: CreateWorkflowDto) {
+    if (this.entitlementService) {
+      const ws = await this.prisma.workspace?.findUnique({
+        where: { id: workspaceId },
+        select: { organizationId: true },
+      });
+      if (ws) {
+        const check = await this.entitlementService.canCreateWorkflow(ws.organizationId);
+        if (!check.allowed) {
+          throw new ForbiddenException(check.reason);
+        }
+      }
+    }
     return this.prisma.$transaction(async (tx) => {
       const workflow = await tx.workflow.create({
         data: {
@@ -552,6 +566,19 @@ export class WorkflowsService {
 
     if (!workflow.isActive || workflow.versions.length === 0) {
       throw new BadRequestException('Cannot execute workflow: workflow is not published or is inactive');
+    }
+
+    if (this.entitlementService) {
+      const ws = await this.prisma.workspace?.findUnique({
+        where: { id: workspaceId },
+        select: { organizationId: true },
+      });
+      if (ws) {
+        const check = await this.entitlementService.canExecuteWorkflow(ws.organizationId);
+        if (!check.allowed) {
+          throw new ForbiddenException(check.reason);
+        }
+      }
     }
 
     const publishedVersion = workflow.versions[0];

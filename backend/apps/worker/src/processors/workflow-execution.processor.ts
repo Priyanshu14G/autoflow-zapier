@@ -1,10 +1,11 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '@libs/database';
 import { QUEUE_NAMES, QueueService, WorkflowExecutionJobData } from '@libs/queue';
-import { RunStatus, StepRunStatus, NodeType } from '@libs/domain';
+import { RunStatus, StepRunStatus, NodeType, UsageMetric } from '@libs/domain';
 import { DataSanitizer, StepExecutor, VariableResolver } from '@libs/engine';
+import { UsageTrackerService } from '@libs/common';
 import { Prisma } from '@prisma/client';
 
 @Processor(QUEUE_NAMES.WORKFLOW_EXECUTION)
@@ -14,6 +15,7 @@ export class WorkflowExecutionProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly queueService: QueueService,
+    @Optional() private readonly usageTracker?: UsageTrackerService,
   ) {
     super();
   }

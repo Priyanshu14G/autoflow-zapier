@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { configuration } from '@libs/common';
+import { configuration, BillingModule } from '@libs/common';
 import { DatabaseModule } from '@libs/database';
 import { QueueModule } from '@libs/queue';
 import { IntegrationsModule } from '@libs/integrations';
@@ -17,6 +17,7 @@ import { ScheduledWorkflowProcessor } from './processors/scheduled-workflow.proc
       envFilePath: ['.env', '.env.local'],
     }),
     DatabaseModule,
+    BillingModule,
     QueueModule,
     IntegrationsModule,
   ],

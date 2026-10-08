@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { configuration, AuditModule } from '@libs/common';
+import { configuration, AuditModule, BillingModule } from '@libs/common';
 import { DatabaseModule } from '@libs/database';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
@@ -12,6 +12,7 @@ import { ConnectionsModule } from './connections/connections.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { ScheduledJobsModule } from './scheduled-jobs/scheduled-jobs.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
+import { BillingApiModule } from './billing/billing.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ApiKeysModule } from './api-keys/api-keys.module';
     }),
     DatabaseModule,
     AuditModule,
+    BillingModule,
     HealthModule,
     AuthModule,
     UsersModule,
@@ -32,6 +34,7 @@ import { ApiKeysModule } from './api-keys/api-keys.module';
     WebhooksModule,
     ScheduledJobsModule,
     ApiKeysModule,
+    BillingApiModule,
   ],
 })
 export class AppModule {}
