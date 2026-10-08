@@ -52,7 +52,7 @@ export class EncryptionService {
         ? payload.ciphertext
         : Buffer.from(payload.ciphertext);
 
-      const decipher = crypto.createDecipheriv(this.algorithm, this.key, iv);
+      const decipher = crypto.createDecipheriv(this.algorithm, this.key, iv, { authTagLength: 16 });
       decipher.setAuthTag(authTag);
 
       const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);

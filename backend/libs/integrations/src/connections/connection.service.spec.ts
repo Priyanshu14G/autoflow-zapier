@@ -52,7 +52,7 @@ describe('ConnectionService', () => {
           authType: 'API_KEY',
           iv: expect.any(String),
           authTag: expect.any(String),
-          credentials: expect.any(Buffer),
+          credentials: expect.any(Uint8Array),
         }),
       }),
     );

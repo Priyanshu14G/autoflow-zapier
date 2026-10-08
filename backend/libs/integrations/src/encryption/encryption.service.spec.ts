@@ -54,8 +54,9 @@ describe('EncryptionService', () => {
     const secret = 'tamper-test';
     const encrypted = service.encrypt(secret);
 
-    // Tamper with auth tag
-    const tamperedTag = encrypted.authTag.slice(0, -2) + (encrypted.authTag.endsWith('0') ? '1' : '0');
+    // Tamper with auth tag while preserving exact 32-hex (16 bytes) length
+    const replacement = encrypted.authTag[0] === 'a' ? 'b' : 'a';
+    const tamperedTag = replacement + encrypted.authTag.slice(1);
 
     expect(() => {
       service.decrypt({ ...encrypted, authTag: tamperedTag });
