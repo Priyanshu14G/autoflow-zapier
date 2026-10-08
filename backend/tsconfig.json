@@ -30,7 +30,9 @@
       "@libs/engine": ["libs/engine/src"],
       "@libs/engine/*": ["libs/engine/src/*"],
       "@libs/integrations": ["libs/integrations/src"],
-      "@libs/integrations/*": ["libs/integrations/src/*"]
+      "@libs/integrations/*": ["libs/integrations/src/*"],
+      "@libs/ai": ["libs/ai/src"],
+      "@libs/ai/*": ["libs/ai/src/*"]
     }
   },
   "include": ["apps/**/*", "libs/**/*"]

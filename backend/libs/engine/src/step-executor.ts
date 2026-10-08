@@ -24,6 +24,28 @@ export interface ActionDispatcher {
   }>;
 }
 
+/**
+ * Interface for AI completion dispatch — keeps engine lib free of @libs/ai dependency.
+ * The worker injects a concrete implementation backed by AiProviderRegistry.
+ */
+export interface AiDispatcher {
+  complete(request: {
+    model: string;
+    provider?: string;
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+    maxTokens?: number;
+    temperature?: number;
+    responseFormat?: 'text' | 'json';
+  }): Promise<{
+    text: string;
+    json?: Record<string, unknown>;
+    usage: { promptTokens: number; completionTokens: number; totalTokens: number };
+    model: string;
+    provider: string;
+    latencyMs: number;
+  }>;
+}
+
 export class TimeoutError extends Error {
   constructor(message = 'Step execution timed out') {
     super(message);
@@ -44,6 +66,7 @@ export class StepExecutor {
     timeoutMs = 30000,
     dispatcher?: ActionDispatcher,
     credentials?: Record<string, unknown>,
+    aiDispatcher?: AiDispatcher,
   ): Promise<StepExecutionResult> {
     const startTime = Date.now();
 
@@ -67,6 +90,7 @@ export class StepExecutor {
       timeoutMs,
       dispatcher,
       credentials,
+      aiDispatcher,
     );
 
     const output = await Promise.race([executionPromise, timeoutPromise]);
@@ -82,6 +106,7 @@ export class StepExecutor {
     timeoutMs: number,
     dispatcher?: ActionDispatcher,
     credentials?: Record<string, unknown>,
+    aiDispatcher?: AiDispatcher,
   ): Promise<Record<string, unknown>> {
     switch (node.type) {
       case NodeType.TRIGGER:
@@ -143,6 +168,59 @@ export class StepExecutor {
           evaluated: true,
           passed: result.passed,
           reason: result.reason,
+        };
+      }
+
+      case NodeType.AI: {
+        const aiConfig = node.config as Record<string, unknown> | undefined;
+        const model = (aiConfig?.model as string | undefined) ?? 'gpt-4o-mini';
+        const providerHint = aiConfig?.provider as string | undefined;
+        const systemPrompt = aiConfig?.systemPrompt as string | undefined;
+        const userPromptTemplate = aiConfig?.prompt as string | undefined;
+        const maxTokens = typeof aiConfig?.maxTokens === 'number' ? aiConfig.maxTokens : undefined;
+        const temperature = typeof aiConfig?.temperature === 'number' ? aiConfig.temperature : undefined;
+        const responseFormat = (aiConfig?.responseFormat as 'text' | 'json' | undefined) ?? 'text';
+
+        // Resolve the user prompt template using variable resolver
+        const userPrompt = userPromptTemplate
+          ? (VariableResolver.resolve(userPromptTemplate, context) as string)
+          : JSON.stringify(input);
+
+        if (!aiDispatcher) {
+          // No AI dispatcher — return stub in non-worker contexts
+          return {
+            status: 'stub',
+            model,
+            prompt: userPrompt,
+            text: '[AI node stub — no dispatcher configured]',
+            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          };
+        }
+
+        const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
+        if (systemPrompt) {
+          messages.push({ role: 'system', content: systemPrompt });
+        }
+        messages.push({ role: 'user', content: userPrompt });
+
+        const aiResult = await aiDispatcher.complete({
+          model,
+          provider: providerHint,
+          messages,
+          maxTokens,
+          temperature,
+          responseFormat,
+        });
+
+        return {
+          status: 'success',
+          model: aiResult.model,
+          provider: aiResult.provider,
+          text: aiResult.text,
+          ...(aiResult.json && { json: aiResult.json }),
+          usage: aiResult.usage,
+          latencyMs: aiResult.latencyMs,
+          completedAt: new Date().toISOString(),
         };
       }
 

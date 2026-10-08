@@ -185,4 +185,174 @@ describe('StepExecutor', () => {
       ),
     ).rejects.toThrow('Connection refused');
   });
+
+  // ── AI Node Tests ─────────────────────────────────────────────────────────
+
+  describe('NodeType.AI', () => {
+    const aiNode = {
+      nodeKey: 'summarize_text',
+      type: NodeType.AI,
+      config: {
+        model: 'gpt-4o-mini',
+        provider: 'openai',
+        systemPrompt: 'You are a helpful assistant.',
+        prompt: 'Summarize: {{trigger.userId}} has balance {{trigger.amount}}',
+        maxTokens: 200,
+        temperature: 0.3,
+        responseFormat: 'text',
+      },
+    };
+
+    const mockAiDispatcher = {
+      complete: jest.fn().mockResolvedValue({
+        text: 'User user_123 has a balance of 250.',
+        usage: { promptTokens: 25, completionTokens: 15, totalTokens: 40 },
+        model: 'gpt-4o-mini',
+        provider: 'openai',
+        latencyMs: 142,
+      }),
+    };
+
+    beforeEach(() => {
+      mockAiDispatcher.complete.mockClear();
+    });
+
+    it('returns stub output when no aiDispatcher is provided', async () => {
+      const result = await StepExecutor.executeWithTimeout(
+        aiNode,
+        {},
+        mockContext,
+        5000,
+        undefined,
+        undefined,
+        undefined,
+      );
+
+      expect(result.output.status).toBe('stub');
+      expect(result.output.model).toBe('gpt-4o-mini');
+      expect(result.output.text).toContain('[AI node stub');
+    });
+
+    it('calls aiDispatcher.complete with resolved prompt variables', async () => {
+      await StepExecutor.executeWithTimeout(
+        aiNode,
+        {},
+        mockContext,
+        5000,
+        undefined,
+        undefined,
+        mockAiDispatcher,
+      );
+
+      expect(mockAiDispatcher.complete).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'gpt-4o-mini',
+          provider: 'openai',
+          messages: expect.arrayContaining([
+            { role: 'system', content: 'You are a helpful assistant.' },
+            {
+              role: 'user',
+              content: 'Summarize: user_123 has balance 250',
+            },
+          ]),
+          maxTokens: 200,
+          temperature: 0.3,
+          responseFormat: 'text',
+        }),
+      );
+    });
+
+    it('returns structured output with model, provider, usage and latency', async () => {
+      const result = await StepExecutor.executeWithTimeout(
+        aiNode,
+        {},
+        mockContext,
+        5000,
+        undefined,
+        undefined,
+        mockAiDispatcher,
+      );
+
+      expect(result.output).toMatchObject({
+        status: 'success',
+        model: 'gpt-4o-mini',
+        provider: 'openai',
+        text: 'User user_123 has a balance of 250.',
+        usage: { promptTokens: 25, completionTokens: 15, totalTokens: 40 },
+        latencyMs: 142,
+      });
+      expect(typeof result.output.completedAt).toBe('string');
+    });
+
+    it('includes json field in output when aiDispatcher returns json', async () => {
+      const jsonDispatcher = {
+        complete: jest.fn().mockResolvedValue({
+          text: '{"summary": "user_123 balance is 250"}',
+          json: { summary: 'user_123 balance is 250' },
+          usage: { promptTokens: 10, completionTokens: 8, totalTokens: 18 },
+          model: 'gpt-4o-mini',
+          provider: 'openai',
+          latencyMs: 90,
+        }),
+      };
+
+      const jsonNode = {
+        ...aiNode,
+        config: { ...aiNode.config, responseFormat: 'json' },
+      };
+
+      const result = await StepExecutor.executeWithTimeout(
+        jsonNode,
+        {},
+        mockContext,
+        5000,
+        undefined,
+        undefined,
+        jsonDispatcher,
+      );
+
+      expect(result.output.json).toEqual({ summary: 'user_123 balance is 250' });
+    });
+
+    it('defaults to JSON.stringify(input) as prompt when no prompt template configured', async () => {
+      const nodeWithoutPrompt = {
+        nodeKey: 'ai_passthrough',
+        type: NodeType.AI,
+        config: {
+          model: 'gemini-1.5-flash',
+        },
+      };
+
+      const dispatcher = {
+        complete: jest.fn().mockResolvedValue({
+          text: 'Processed',
+          usage: { promptTokens: 5, completionTokens: 3, totalTokens: 8 },
+          model: 'gemini-1.5-flash',
+          provider: 'gemini',
+          latencyMs: 50,
+        }),
+      };
+
+      await StepExecutor.executeWithTimeout(
+        nodeWithoutPrompt,
+        { data: 'test' },
+        mockContext,
+        5000,
+        undefined,
+        undefined,
+        dispatcher,
+      );
+
+      expect(dispatcher.complete).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              role: 'user',
+              content: expect.stringContaining('data'),
+            }),
+          ]),
+        }),
+      );
+    });
+  });
 });

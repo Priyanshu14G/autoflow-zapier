@@ -6,6 +6,7 @@ import { QUEUE_NAMES, QueueService, WorkflowExecutionJobData } from '@libs/queue
 import { RunStatus, StepRunStatus, NodeType, UsageMetric } from '@libs/domain';
 import { DataSanitizer, StepExecutor, VariableResolver } from '@libs/engine';
 import { UsageTrackerService } from '@libs/common';
+import { AiDispatcherAdapter } from '../ai/ai-dispatcher.adapter';
 import { Prisma } from '@prisma/client';
 
 @Processor(QUEUE_NAMES.WORKFLOW_EXECUTION)
@@ -16,6 +17,7 @@ export class WorkflowExecutionProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly queueService: QueueService,
     @Optional() private readonly usageTracker?: UsageTrackerService,
+    @Optional() private readonly aiDispatcher?: AiDispatcherAdapter,
   ) {
     super();
   }
@@ -99,6 +101,9 @@ export class WorkflowExecutionProcessor extends WorkerHost {
       triggerPayload,
       executionContext,
       10000,
+      undefined,
+      undefined,
+      this.aiDispatcher,
     );
     const sanitizedOutput = DataSanitizer.sanitize(triggerResult.output);
 
