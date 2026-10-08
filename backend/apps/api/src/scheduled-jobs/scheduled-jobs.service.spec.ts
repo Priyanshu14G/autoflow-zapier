@@ -14,7 +14,6 @@ describe('ScheduledJobsService - Cron Matching', () => {
   });
 
   describe('matchesCron', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const match = (expr: string, date: Date) => (service as any).matchesCron(expr, date) as boolean;
 
     it('should match a wildcard expression for any date', () => {
@@ -62,7 +61,6 @@ describe('ScheduledJobsService - Cron Matching', () => {
   });
 
   describe('calculateNextRunAt', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const calc = (dto: { cronExpression?: string; intervalMs?: number }, from: Date) =>
       (service as any).calculateNextRunAt(dto, from) as Date;
 

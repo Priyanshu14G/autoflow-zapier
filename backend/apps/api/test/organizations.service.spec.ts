@@ -3,7 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { OrganizationsService } from '../src/organizations/organizations.service';
 import { PrismaService } from '@libs/database';
 import { AuditLogService } from '@libs/common';
-import { Role } from '@libs/domain';
+
 
 describe('OrganizationsService & Audit Logs', () => {
   let service: OrganizationsService;

@@ -3,7 +3,7 @@ import { Logger, Optional } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '@libs/database';
 import { QUEUE_NAMES, QueueService, WorkflowExecutionJobData } from '@libs/queue';
-import { RunStatus, StepRunStatus, NodeType, UsageMetric } from '@libs/domain';
+import { RunStatus, StepRunStatus, NodeType } from '@libs/domain';
 import { DataSanitizer, StepExecutor, VariableResolver } from '@libs/engine';
 import { UsageTrackerService } from '@libs/common';
 import { AiDispatcherAdapter } from '../ai/ai-dispatcher.adapter';
