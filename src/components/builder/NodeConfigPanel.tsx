@@ -41,6 +41,14 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   const [config, setConfig] = useState<Record<string, any>>(data.config || {});
   const [activeVariableField, setActiveVariableField] = useState<string | null>(null);
 
+  // Sync state when node selection changes
+  React.useEffect(() => {
+    setTitle(node.data.title);
+    setSubtitle(node.data.subtitle);
+    setConfig(node.data.config || {});
+    setActiveVariableField(null);
+  }, [node.id, node.data]);
+
   // Testing step state
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
@@ -395,35 +403,126 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           )}
 
           {/* GENERIC / HTTP CONFIG */}
-          {data.app === 'http' && (
+          {(data.app === 'http' || data.app === 'webhook' || data.category === 'action' && data.title?.toLowerCase().includes('http')) && (
             <div className="space-y-3">
-              <div>
-                <label className="text-[11px] font-medium text-neutral-400 block mb-1">Endpoint URL</label>
-                <input
-                  type="text"
-                  value={config.url || ''}
-                  onChange={(e) => handleFieldChange('url', e.target.value)}
-                  placeholder="https://api.external.com/v1/event"
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500 font-mono"
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-medium text-neutral-400 block mb-1">HTTP Method</label>
-                <select
-                  value={config.method || 'POST'}
-                  onChange={(e) => handleFieldChange('method', e.target.value)}
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="GET">GET</option>
-                  <option value="POST">POST</option>
-                  <option value="PUT">PUT</option>
-                  <option value="PATCH">PATCH</option>
-                  <option value="DELETE">DELETE</option>
-                </select>
-              </div>
+              {data.category === 'trigger' ? (
+                <>
+                  <div>
+                    <label className="text-[11px] font-medium text-neutral-400 block mb-1">Webhook Path</label>
+                    <input
+                      type="text"
+                      value={config.path || '/webhooks/catch'}
+                      onChange={(e) => handleFieldChange('path', e.target.value)}
+                      placeholder="/webhooks/catch"
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-medium text-neutral-400">Sample Incoming Body (JSON)</label>
+                      <button
+                        type="button"
+                        onClick={() => setActiveVariableField(activeVariableField === 'body' ? null : 'body')}
+                        className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300"
+                      >
+                        <Variable className="w-3 h-3" /> Insert Variable
+                      </button>
+                    </div>
+                    {activeVariableField === 'body' && (
+                      <div className="mb-2">
+                        <VariablePicker
+                          nodes={allNodes}
+                          currentNodeId={node.id}
+                          onSelectVariable={(v) => handleInsertVariable('body', v)}
+                        />
+                      </div>
+                    )}
+                    <textarea
+                      rows={4}
+                      value={typeof config.body === 'object' ? JSON.stringify(config.body, null, 2) : config.body || '{\n  "event": "user.signup",\n  "email": "lead@company.com"\n}'}
+                      onChange={(e) => handleFieldChange('body', e.target.value)}
+                      placeholder={'{\n  "event": "user.signup",\n  "userId": 1001\n}'}
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500 resize-none font-mono"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-[11px] font-medium text-neutral-400 block mb-1">Endpoint URL</label>
+                    <input
+                      type="text"
+                      value={config.url || ''}
+                      onChange={(e) => handleFieldChange('url', e.target.value)}
+                      placeholder="https://api.external.com/v1/event"
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-medium text-neutral-400 block mb-1">HTTP Method</label>
+                    <select
+                      value={config.method || 'POST'}
+                      onChange={(e) => handleFieldChange('method', e.target.value)}
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500 font-medium"
+                    >
+                      <option value="POST">POST (Standard with Body)</option>
+                      <option value="GET">GET</option>
+                      <option value="PUT">PUT (with Body)</option>
+                      <option value="PATCH">PATCH (with Body)</option>
+                      <option value="DELETE">DELETE</option>
+                    </select>
+                  </div>
+                  {/* Headers */}
+                  <div>
+                    <label className="text-[11px] font-medium text-neutral-400 block mb-1">Headers (JSON)</label>
+                    <textarea
+                      rows={2}
+                      value={config.headers || ''}
+                      onChange={(e) => handleFieldChange('headers', e.target.value)}
+                      placeholder={'{"Content-Type": "application/json", "Authorization": "Bearer {{trigger.token}}"}'}
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500 resize-none font-mono"
+                    />
+                  </div>
+                  {/* Body — always accessible */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-[11px] font-medium text-neutral-400">Request Body (JSON)</label>
+                        {config.method === 'GET' && (
+                          <span className="text-[9px] text-amber-400 bg-amber-500/10 px-1 rounded">optional for GET</span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveVariableField(activeVariableField === 'body' ? null : 'body')}
+                        className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300"
+                      >
+                        <Variable className="w-3 h-3" /> Insert Variable
+                      </button>
+                    </div>
+                    {activeVariableField === 'body' && (
+                      <div className="mb-2">
+                        <VariablePicker
+                          nodes={allNodes}
+                          currentNodeId={node.id}
+                          onSelectVariable={(v) => handleInsertVariable('body', v)}
+                        />
+                      </div>
+                    )}
+                    <textarea
+                      rows={5}
+                      value={typeof config.body === 'object' ? JSON.stringify(config.body, null, 2) : config.body || ''}
+                      onChange={(e) => handleFieldChange('body', e.target.value)}
+                      placeholder={'{\n  "message": "Hello from AutoFlow",\n  "payload": {{trigger.body}}\n}'}
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500 resize-none font-mono"
+                    />
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
+
 
         {/* Output Variables Exposed */}
         <div className="pt-3 border-t border-neutral-800/80 space-y-2">

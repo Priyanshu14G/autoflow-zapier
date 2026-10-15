@@ -10,15 +10,38 @@ import { QueueService } from './queue.service';
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        connection: {
-          host: configService.get<string>('REDIS_HOST', 'localhost'),
-          port: configService.get<number>('REDIS_PORT', 6379),
-          password: configService.get<string>('REDIS_PASSWORD') || undefined,
-          lazyConnect: true,
-          retryStrategy: (times) => Math.min(times * 100, 3000),
-        },
-      }),
+      useFactory: (configService: ConfigService) => {
+        const redisUrl = configService.get<string>('REDIS_URL');
+        if (redisUrl) {
+          return {
+            connection: {
+              url: redisUrl,
+              maxRetriesPerRequest: null,
+              lazyConnect: true,
+              retryStrategy: (times: number) => Math.min(times * 100, 3000),
+            },
+          };
+        }
+
+        const host = configService.get<string>('REDIS_HOST', 'localhost');
+        const port = configService.get<number>('REDIS_PORT', 6379);
+        const password = configService.get<string>('REDIS_PASSWORD') || undefined;
+        const useTls =
+          configService.get<string>('REDIS_TLS') === 'true' ||
+          host.includes('upstash.io');
+
+        return {
+          connection: {
+            host,
+            port,
+            password,
+            tls: useTls ? {} : undefined,
+            maxRetriesPerRequest: null,
+            lazyConnect: true,
+            retryStrategy: (times: number) => Math.min(times * 100, 3000),
+          },
+        };
+      },
     }),
     BullModule.registerQueue(
       { name: QUEUE_NAMES.WORKFLOW_EXECUTION },

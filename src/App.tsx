@@ -19,6 +19,14 @@ import { BillingView } from './components/billing/BillingView';
 import { SettingsView } from './components/settings/SettingsView';
 import { AuthModal } from './components/auth/AuthModal';
 import { AIWorkflowGeneratorModal } from './components/ai/AIWorkflowGeneratorModal';
+import {
+  TokenStore,
+  WorkspaceStore,
+  WorkflowApi,
+  AuthApi,
+  apiWorkflowToFrontend,
+  apiRunToFrontend,
+} from './services/apiClient';
 
 export function AppContent() {
   const { showToast } = useToast();
@@ -42,14 +50,96 @@ export function AppContent() {
   const [isAIArchitectOpen, setIsAIArchitectOpen] = useState(false);
   const [versionsModalWorkflow, setVersionsModalWorkflow] = useState<Workflow | null>(null);
   const [selectedRunForDrawer, setSelectedRunForDrawer] = useState<WorkflowRun | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Initialize data on mount
-  useEffect(() => {
+  // ── Load data: backend when authenticated, local fallback otherwise ──────
+  const loadData = async () => {
+    const isAuthenticated = TokenStore.isAuthenticated();
+    const workspaceId = WorkspaceStore.get();
+
+    if (isAuthenticated && workspaceId) {
+      try {
+        // Load workflows from backend
+        const apiWorkflows = await WorkflowApi.list(workspaceId);
+        const mapped = apiWorkflows.map(apiWorkflowToFrontend);
+        setWorkflows(mapped);
+        StorageService.saveWorkflows(mapped);
+
+        // Load runs directly from backend
+        const allRuns: WorkflowRun[] = [];
+        for (const wf of apiWorkflows.slice(0, 15)) {
+          try {
+            const wfRuns = await WorkflowApi.listRuns(workspaceId, wf.id);
+            allRuns.push(...wfRuns.map((r) => apiRunToFrontend(r, wf.name)));
+          } catch { /* ignore individual workflow run errors */ }
+        }
+
+        // Include any recently recorded local executions
+        const localRuns = StorageService.getRuns();
+        const existingIds = new Set(allRuns.map((r) => r.id));
+        for (const lr of localRuns) {
+          if (!existingIds.has(lr.id)) {
+            allRuns.push(lr);
+          }
+        }
+
+        allRuns.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+        setRuns(allRuns);
+
+        // Update user profile from backend
+        try {
+          const me = await AuthApi.getMe();
+          if (me?.user) {
+            const updatedUser: User = {
+              ...currentUser,
+              id: me.user.id || currentUser.id,
+              name: `${me.user.firstName || ''} ${me.user.lastName || ''}`.trim() || me.user.email,
+              email: me.user.email || currentUser.email,
+            };
+            setCurrentUser(updatedUser);
+            StorageService.saveCurrentUser(updatedUser);
+          }
+        } catch { /* use cached profile */ }
+
+        return;
+      } catch (e) {
+        console.warn('Backend load note, using local storage cache:', e);
+      }
+    }
+
+    // Fallback to local storage
     setWorkflows(StorageService.getWorkflows());
     setRuns(StorageService.getRuns());
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await loadData();
+    setIsRefreshing(false);
+    showToast('Synchronized with backend', 'info');
+  };
+
+  const handleClearDemoRuns = () => {
+    const activeRuns = runs.filter((r) => !['run-1', 'run-2', 'run-3', 'run-4'].includes(r.id));
+    setRuns(activeRuns);
+    StorageService.saveRuns(activeRuns);
+    showToast('Demo data hidden. Showing live pipeline runs.', 'info');
+  };
+
+  useEffect(() => {
+    loadData();
     setIntegrations(StorageService.getIntegrations());
     setTemplates(StorageService.getTemplates());
   }, []);
+
+  // Reload data when switching to runs or workflows tab
+  useEffect(() => {
+    if (activeTab === 'runs' || activeTab === 'workflows' || activeTab === 'dashboard') {
+      loadData();
+    }
+  }, [activeTab]);
+
+
 
   // Workflow Handlers
   const handleCreateWorkflow = () => {
@@ -231,6 +321,9 @@ export function AppContent() {
             <RunsView
               runs={runs}
               onRetryWorkflow={handleRetryWorkflow}
+              onRefresh={handleRefresh}
+              isRefreshing={isRefreshing}
+              onClearDemoRuns={handleClearDemoRuns}
             />
           )}
 
@@ -269,6 +362,7 @@ export function AppContent() {
         onUserAuthenticated={(u) => {
           setCurrentUser(u);
           StorageService.saveCurrentUser(u);
+          loadData();
         }}
       />
 

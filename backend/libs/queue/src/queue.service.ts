@@ -45,7 +45,8 @@ export class QueueService {
     data: WorkflowExecutionJobData,
     idempotencyKey?: string,
   ) {
-    const jobId = idempotencyKey ? `wf-run:${idempotencyKey}` : `wf-run:${data.runId}`;
+    const sanitizedKey = idempotencyKey ? idempotencyKey.replace(/:/g, '__') : undefined;
+    const jobId = sanitizedKey ? `wf-run__${sanitizedKey}` : `wf-run__${data.runId}`;
     this.logger.log(`Enqueueing workflow execution job ${jobId} for workflow ${data.workflowId}`);
 
     return this.workflowQueue.add('execute-workflow', data, {
@@ -56,7 +57,8 @@ export class QueueService {
   }
 
   async enqueueStepExecution(data: StepExecutionJobData) {
-    const jobId = `step:${data.runId}:${data.nodeKey}:${data.retryCount || 0}`;
+    const sanitizedNodeKey = (data.nodeKey || 'node').replace(/:/g, '__');
+    const jobId = `step__${data.runId}__${sanitizedNodeKey}__${data.retryCount || 0}`;
     this.logger.log(`Enqueueing step execution job ${jobId}`);
 
     return this.stepQueue.add('execute-step', data, {
@@ -67,7 +69,8 @@ export class QueueService {
   }
 
   async enqueueRetry(data: StepExecutionJobData, delayMs: number) {
-    const jobId = `retry:${data.runId}:${data.nodeKey}:${data.retryCount || 1}`;
+    const sanitizedNodeKey = (data.nodeKey || 'node').replace(/:/g, '__');
+    const jobId = `retry__${data.runId}__${sanitizedNodeKey}__${data.retryCount || 1}`;
     this.logger.log(`Enqueueing retry job ${jobId} with delay of ${delayMs}ms`);
 
     return this.retryQueue.add('retry-step', data, {
@@ -85,7 +88,7 @@ export class QueueService {
    * duplicate queue jobs.
    */
   async enqueueScheduledWorkflow(data: ScheduledWorkflowJobData) {
-    const idempotencyKey = `scheduled:${data.scheduledJobId}:${data.scheduledAt}`;
+    const idempotencyKey = `scheduled__${data.scheduledJobId}__${data.scheduledAt}`.replace(/:/g, '__');
     this.logger.log(
       `Enqueueing scheduled workflow trigger for ${data.workflowId} [${idempotencyKey}]`,
     );

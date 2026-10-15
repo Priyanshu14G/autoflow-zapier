@@ -4,7 +4,16 @@ import { GoogleGenAI } from '@google/genai';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+dotenv.config({ path: '.env.local' });
 dotenv.config();
+
+import { neon } from '@neondatabase/serverless';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+} from '@aws-sdk/client-s3';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,6 +22,30 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
+
+// Initialize Neon Postgres Serverless Driver
+const dbUrl = process.env.DATABASE_URL;
+const sql = dbUrl ? neon(dbUrl) : null;
+
+// Initialize Neon Object Storage (S3-compatible) Client
+const s3Endpoint = process.env.AWS_ENDPOINT_URL_S3;
+const s3Region = process.env.AWS_REGION || 'ap-southeast-1';
+const s3AccessKey = process.env.AWS_ACCESS_KEY_ID;
+const s3SecretKey = process.env.AWS_SECRET_ACCESS_KEY;
+const s3Bucket = process.env.NEON_STORAGE_BUCKET || 'assets';
+
+const s3Client =
+  s3Endpoint && s3AccessKey && s3SecretKey
+    ? new S3Client({
+        endpoint: s3Endpoint,
+        region: s3Region,
+        credentials: {
+          accessKeyId: s3AccessKey,
+          secretAccessKey: s3SecretKey,
+        },
+        forcePathStyle: true,
+      })
+    : null;
 
 // In-memory webhook event store for testing
 const webhookEvents: Array<{
@@ -36,6 +69,195 @@ if (process.env.GEMINI_API_KEY) {
     },
   });
 }
+
+// ── Neon Services API Endpoints ──────────────────────────────────────────
+
+// Neon status check
+app.get('/api/neon/status', async (_req, res) => {
+  res.json({
+    branch: process.env.NEON_BRANCH || 'unknown',
+    postgres: {
+      configured: !!sql,
+      endpoint: dbUrl ? dbUrl.split('@')[1]?.split('/')[0] : null,
+    },
+    auth: {
+      configured: !!process.env.NEON_AUTH_BASE_URL,
+      baseUrl: process.env.NEON_AUTH_BASE_URL,
+      jwksUrl: process.env.NEON_AUTH_JWKS_URL,
+    },
+    objectStorage: {
+      configured: !!s3Client,
+      endpoint: s3Endpoint,
+      region: s3Region,
+      bucket: s3Bucket,
+    },
+  });
+});
+
+// Neon End-to-End Test for all 3 services
+app.get('/api/neon/test-all', async (_req, res) => {
+  const results: Record<string, any> = {
+    timestamp: new Date().toISOString(),
+    branch: process.env.NEON_BRANCH || 'production',
+  };
+
+  // 1. Test Neon Postgres
+  try {
+    if (!sql) throw new Error('DATABASE_URL is not configured');
+    const dbRes = await sql`SELECT NOW() as current_time, current_database() as db_name, version() as pg_version`;
+    const tablesRes = await sql`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+      ORDER BY table_name
+      LIMIT 10
+    `;
+    results.postgres = {
+      status: 'connected',
+      currentTime: dbRes[0]?.current_time,
+      database: dbRes[0]?.db_name,
+      sampleTables: tablesRes.map((t: any) => t.table_name),
+    };
+  } catch (err: any) {
+    results.postgres = {
+      status: 'error',
+      message: err.message,
+    };
+  }
+
+  // 2. Test Neon Auth (JWKS and Auth Base URL)
+  try {
+    const jwksUrl = process.env.NEON_AUTH_JWKS_URL;
+    if (!jwksUrl) throw new Error('NEON_AUTH_JWKS_URL is not configured');
+    const authFetch = await fetch(jwksUrl);
+    if (!authFetch.ok) {
+      throw new Error(`Failed to fetch JWKS: ${authFetch.status} ${authFetch.statusText}`);
+    }
+    const jwks = await authFetch.json();
+    results.auth = {
+      status: 'connected',
+      baseUrl: process.env.NEON_AUTH_BASE_URL,
+      jwksUrl,
+      keyCount: Array.isArray(jwks?.keys) ? jwks.keys.length : 0,
+    };
+  } catch (err: any) {
+    results.auth = {
+      status: 'error',
+      message: err.message,
+    };
+  }
+
+  // 3. Test Neon Object Storage (PutObject, GetObject, ListObjectsV2)
+  try {
+    if (!s3Client) throw new Error('Object storage credentials not configured');
+    const testKey = `test-health-${Date.now()}.txt`;
+    const testContent = `Neon Object Storage Health Check - ${new Date().toISOString()}`;
+
+    // Upload test file
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: s3Bucket,
+        Key: testKey,
+        Body: testContent,
+        ContentType: 'text/plain',
+      }),
+    );
+
+    // List files
+    const listRes = await s3Client.send(
+      new ListObjectsV2Command({
+        Bucket: s3Bucket,
+        MaxKeys: 10,
+      }),
+    );
+
+    // Read back test file
+    const getRes = await s3Client.send(
+      new GetObjectCommand({
+        Bucket: s3Bucket,
+        Key: testKey,
+      }),
+    );
+    const readBackBody = await getRes.Body?.transformToString();
+
+    results.objectStorage = {
+      status: 'connected',
+      bucket: s3Bucket,
+      uploadedKey: testKey,
+      contentMatched: readBackBody === testContent,
+      objectCount: listRes.KeyCount ?? 0,
+      recentKeys: listRes.Contents?.map((c) => c.Key) ?? [],
+    };
+  } catch (err: any) {
+    results.objectStorage = {
+      status: 'error',
+      message: err.message,
+    };
+  }
+
+  const allPassed =
+    results.postgres?.status === 'connected' &&
+    results.auth?.status === 'connected' &&
+    results.objectStorage?.status === 'connected';
+
+  res.status(allPassed ? 200 : 500).json({
+    success: allPassed,
+    services: results,
+  });
+});
+
+// Storage Object Upload endpoint
+app.post('/api/neon/storage/upload', async (req, res) => {
+  try {
+    if (!s3Client) {
+      res.status(500).json({ error: 'Object storage is not configured' });
+      return;
+    }
+    const { key, content, contentType } = req.body;
+    if (!key || !content) {
+      res.status(400).json({ error: 'Missing key or content' });
+      return;
+    }
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: s3Bucket,
+        Key: key,
+        Body: content,
+        ContentType: contentType || 'text/plain',
+      }),
+    );
+    res.json({ success: true, key, bucket: s3Bucket });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Storage Object List endpoint
+app.get('/api/neon/storage/list', async (_req, res) => {
+  try {
+    if (!s3Client) {
+      res.status(500).json({ error: 'Object storage is not configured' });
+      return;
+    }
+    const data = await s3Client.send(
+      new ListObjectsV2Command({
+        Bucket: s3Bucket,
+        MaxKeys: 50,
+      }),
+    );
+    res.json({
+      success: true,
+      bucket: s3Bucket,
+      objects: data.Contents?.map((c) => ({
+        key: c.Key,
+        size: c.Size,
+        lastModified: c.LastModified,
+      })) ?? [],
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // 1. Natural Language Workflow Generation endpoint
 app.post('/api/ai/generate-workflow', async (req, res) => {

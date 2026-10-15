@@ -15,6 +15,8 @@ import {
   ShieldCheck
 } from 'lucide-react';
 
+import { AuthApi, TokenStore, WorkspaceStore } from '../../services/apiClient';
+
 export type AuthMode = 'login' | 'signup' | 'forgot' | 'verify';
 
 interface AuthModalProps {
@@ -35,7 +37,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const { showToast } = useToast();
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState('alex.ops@autoflow.io');
-  const [password, setPassword] = useState('••••••••••••');
+  const [password, setPassword] = useState('SecurePassword123!');
   const [name, setName] = useState('Alex Chen');
   const [verificationCode, setVerificationCode] = useState('941203');
   const [isLoading, setIsLoading] = useState(false);
@@ -46,42 +48,78 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setIsLoading(true);
     setError(null);
 
-    // Simulate authenticating against backend Auth Service
-    await new Promise((r) => setTimeout(r, 600));
+    try {
+      if (mode === 'forgot') {
+        setIsLoading(false);
+        showToast('Password reset instructions sent to ' + email, 'success');
+        setMode('login');
+        return;
+      }
 
-    if (mode === 'forgot') {
+      if (mode === 'signup') {
+        const parts = name.trim().split(' ');
+        const firstName = parts[0] || 'User';
+        const lastName = parts.slice(1).join(' ') || undefined;
+
+        const authRes = await AuthApi.register({
+          email,
+          password,
+          firstName,
+          lastName,
+        });
+
+        const authenticatedUser: User = {
+          id: authRes.user.id,
+          name: `${authRes.user.firstName || ''} ${authRes.user.lastName || ''}`.trim() || email,
+          email: authRes.user.email,
+          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+          role: 'owner',
+          createdAt: new Date().toISOString(),
+        };
+
+        StorageService.saveCurrentUser(authenticatedUser);
+        onUserAuthenticated(authenticatedUser);
+        showToast(`Account registered and signed in as ${authenticatedUser.name}!`, 'success');
+        setIsLoading(false);
+        onClose();
+        return;
+      }
+
+      // Default: login
+      const authRes = await AuthApi.login({ email, password });
+
+      const authenticatedUser: User = {
+        id: authRes.user.id,
+        name: `${authRes.user.firstName || ''} ${authRes.user.lastName || ''}`.trim() || email,
+        email: authRes.user.email,
+        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+        role: 'owner',
+        createdAt: new Date().toISOString(),
+      };
+
+      StorageService.saveCurrentUser(authenticatedUser);
+      onUserAuthenticated(authenticatedUser);
+      showToast(`Signed in to backend as ${authenticatedUser.name}!`, 'success');
       setIsLoading(false);
-      showToast('Password reset instructions sent to ' + email, 'success');
-      setMode('login');
-      return;
-    }
-
-    if (mode === 'signup') {
+      onClose();
+    } catch (err: any) {
+      console.warn('Backend auth failed:', err);
+      // Fallback local auth if backend request failed
+      if (err.message && err.message.includes('Invalid credentials')) {
+        setError('Invalid email or password. Please verify your credentials.');
+        setIsLoading(false);
+        return;
+      }
+      if (err.message && err.message.includes('already exists')) {
+        // If email already exists, prompt user to log in instead
+        setError('This email is already registered. Please sign in instead.');
+        setIsLoading(false);
+        return;
+      }
+      // If server unreachable, notify and allow offline
+      setError(`Backend error: ${err.message}. Check backend is running on port 4000.`);
       setIsLoading(false);
-      showToast('Account created! Please verify your email code.', 'info');
-      setMode('verify');
-      return;
     }
-
-    if (mode === 'verify') {
-      setIsLoading(false);
-      showToast('Email verified successfully! Welcome to AutoFlow.', 'success');
-    }
-
-    const authenticatedUser: User = {
-      id: `usr_${Date.now().toString(36)}`,
-      name: name || 'Alex Chen',
-      email: email || 'alex.ops@autoflow.io',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
-      role: 'owner',
-      createdAt: new Date().toISOString(),
-    };
-
-    StorageService.saveCurrentUser(authenticatedUser);
-    onUserAuthenticated(authenticatedUser);
-    showToast(`Signed in as ${authenticatedUser.name}`, 'success');
-    setIsLoading(false);
-    onClose();
   };
 
   const handleGoogleAuth = async () => {

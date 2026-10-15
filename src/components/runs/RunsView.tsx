@@ -16,12 +16,29 @@ import {
 interface RunsViewProps {
   runs: WorkflowRun[];
   onRetryWorkflow: (run: WorkflowRun) => void;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
+  onClearDemoRuns?: () => void;
 }
 
-export const RunsView: React.FC<RunsViewProps> = ({ runs, onRetryWorkflow }) => {
+export const RunsView: React.FC<RunsViewProps> = ({
+  runs,
+  onRetryWorkflow,
+  onRefresh,
+  isRefreshing = false,
+  onClearDemoRuns,
+}) => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | RunStatus>('all');
   const [selectedRun, setSelectedRun] = useState<WorkflowRun | null>(null);
+
+  // Auto-poll if any run is currently running
+  React.useEffect(() => {
+    const hasRunning = runs.some((r) => r.status === 'running');
+    if (!hasRunning || !onRefresh) return;
+    const interval = setInterval(onRefresh, 3000);
+    return () => clearInterval(interval);
+  }, [runs, onRefresh]);
 
   const filteredRuns = runs.filter((r) => {
     const matchesSearch =
@@ -45,9 +62,33 @@ export const RunsView: React.FC<RunsViewProps> = ({ runs, onRetryWorkflow }) => 
           </p>
         </div>
 
-        <span className="text-xs font-mono text-neutral-400 bg-neutral-900 border border-neutral-800 px-3 py-1.5 rounded-xl">
-          {runs.length} Total Logged Invocations
-        </span>
+        <div className="flex items-center gap-2">
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-xs text-neutral-200 hover:text-white transition-colors disabled:opacity-50"
+              title="Refresh runs from backend"
+            >
+              <RotateCw className={`w-3.5 h-3.5 text-indigo-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Syncing...' : 'Sync with Backend'}</span>
+            </button>
+          )}
+
+          {onClearDemoRuns && runs.some((r) => r.id.startsWith('run-1') || r.id.startsWith('run-2') || r.id.startsWith('run-3') || r.id.startsWith('run-4')) && (
+            <button
+              onClick={onClearDemoRuns}
+              className="px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-rose-800/60 text-xs text-neutral-400 hover:text-rose-300 transition-colors"
+              title="Remove sample/demo runs and show only active runs"
+            >
+              Hide Demo Data
+            </button>
+          )}
+
+          <span className="text-xs font-mono text-neutral-400 bg-neutral-900 border border-neutral-800 px-3 py-1.5 rounded-xl">
+            {runs.length} Total Logged Invocations
+          </span>
+        </div>
       </div>
 
       {/* Filter and Search Controls */}

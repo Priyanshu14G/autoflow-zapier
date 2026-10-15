@@ -4,9 +4,11 @@ export interface AppConfig {
   apiPrefix: string;
   databaseUrl: string;
   redis: {
+    url?: string;
     host: string;
     port: number;
     password?: string;
+    tls?: boolean;
   };
   jwt: {
     secret: string;
@@ -22,9 +24,11 @@ export const configuration = (): AppConfig => ({
   apiPrefix: process.env.API_PREFIX || 'api/v1',
   databaseUrl: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/autoflow_dev?schema=public',
   redis: {
+    url: process.env.REDIS_URL || undefined,
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
     password: process.env.REDIS_PASSWORD || undefined,
+    tls: process.env.REDIS_TLS === 'true',
   },
   jwt: {
     secret: process.env.JWT_SECRET || 'dev-secret-key-must-be-changed-in-production',

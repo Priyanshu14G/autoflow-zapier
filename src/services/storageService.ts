@@ -239,6 +239,10 @@ export class StorageService {
     }
   }
 
+  static saveRun(run: WorkflowRun): void {
+    this.addRun(run);
+  }
+
   static addRun(run: WorkflowRun): void {
     const list = this.getRuns();
     list.unshift(run);
